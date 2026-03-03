@@ -12,6 +12,7 @@ namespace Kiyomi_s_Instant_Pet
     {
         private ModConfig Config;
         private Action<ModConfig> OnSave;
+        private Action SpawnPetAction;
 
         private TextBox nameTextBox;
         private ClickableComponent nameTextBoxCC;
@@ -19,6 +20,7 @@ namespace Kiyomi_s_Instant_Pet
         private ClickableTextureComponent dogButton;
         private ClickableTextureComponent catButton;
         private ClickableTextureComponent okButton;
+        private ClickableTextureComponent spawnPetButton;
 
         private string selectedPetType;
         private bool isNameBoxSelected = false;
@@ -28,14 +30,15 @@ namespace Kiyomi_s_Instant_Pet
         private Point dragOffset;
         private Rectangle titleBarBounds;
 
-        public PetConfigMenu(ModConfig config, Action<ModConfig> onSave) : base(
+        public PetConfigMenu(ModConfig config, Action<ModConfig> onSave, Action spawnPetAction) : base(
             (Game1.uiViewport.Width - 600) / 2,
-            (Game1.uiViewport.Height - 400) / 2,
+            (Game1.uiViewport.Height - 450) / 2,
             600,
-            400)
+            450)
         {
             Config = config;
             OnSave = onSave;
+            SpawnPetAction = spawnPetAction;
             selectedPetType = config.PetType;
 
             // Define title bar for dragging (top 64 pixels of the menu)
@@ -92,6 +95,16 @@ namespace Kiyomi_s_Instant_Pet
             {
                 name = "OK"
             };
+
+            // Spawn Pet button (+ icon)
+            spawnPetButton = new ClickableTextureComponent(
+                new Rectangle(xPositionOnScreen + (width / 2) - 40, yPositionOnScreen + 290, 80, 80),
+                Game1.mouseCursors,
+                new Rectangle(0, 410, 16, 16), // Plus sign icon
+                5f)
+            {
+                name = "SpawnPet"
+            };
         }
 
         public override void receiveLeftClick(int x, int y, bool playSound = true)
@@ -138,6 +151,21 @@ namespace Kiyomi_s_Instant_Pet
                     nameTextBox.Text = "Ruby";
                 }
                 Game1.playSound("cat");
+            }
+
+            // Check Spawn Pet button click
+            if (spawnPetButton.containsPoint(x, y))
+            {
+                // Save current config first
+                Config.PetType = selectedPetType;
+                Config.PetName = string.IsNullOrWhiteSpace(nameTextBox.Text) ? (selectedPetType == "Cat" ? "Ruby" : "Max") : nameTextBox.Text;
+
+                // Call spawn action
+                SpawnPetAction?.Invoke();
+
+                Game1.playSound("coin");
+                Game1.addHUDMessage(new HUDMessage($"Spawning {Config.PetName} the {Config.PetType}!", 2));
+                return;
             }
 
             // Check OK button click
@@ -193,6 +221,7 @@ namespace Kiyomi_s_Instant_Pet
             dogButton.tryHover(x, y, 0.25f);
             catButton.tryHover(x, y, 0.25f);
             okButton.tryHover(x, y, 0.25f);
+            spawnPetButton.tryHover(x, y, 0.25f);
 
             // Change cursor when hovering over title bar
             if (titleBarBounds.Contains(x, y) && !isDragging)
@@ -269,6 +298,22 @@ namespace Kiyomi_s_Instant_Pet
                     catButton.bounds.Width + 16, catButton.bounds.Height + 16,
                     Color.White, 4f);
                 b.DrawString(Game1.smallFont, "Cat", new Vector2(catButton.bounds.X + 80, catButton.bounds.Y + 20), Game1.textColor);
+            }
+
+            // Draw Spawn Pet button
+            spawnPetButton.draw(b);
+
+            // Draw label for spawn button
+            string spawnLabel = "Spawn New Pet";
+            Vector2 spawnLabelSize = Game1.smallFont.MeasureString(spawnLabel);
+            b.DrawString(Game1.smallFont, spawnLabel, 
+                new Vector2(xPositionOnScreen + (width / 2) - (spawnLabelSize.X / 2), spawnPetButton.bounds.Y + 85), 
+                Game1.textColor);
+
+            // Draw hover tooltip for spawn button
+            if (spawnPetButton.containsPoint(mouseX, mouseY))
+            {
+                IClickableMenu.drawHoverText(b, "Spawn a new pet instantly\n(Use if pet was removed)", Game1.smallFont);
             }
 
             // Draw OK button

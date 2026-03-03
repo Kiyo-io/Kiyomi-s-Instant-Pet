@@ -28,12 +28,10 @@ namespace Kiyomi_s_Instant_Pet
             InstantPetPatches.ApplyPatches(harmony, Monitor);
 
             helper.Events.GameLoop.SaveLoaded += OnSaveLoaded;
-            helper.Events.GameLoop.UpdateTicked += OnUpdateTicked;
             helper.Events.Display.RenderedHud += OnRenderedHud;
             helper.Events.Input.ButtonPressed += OnButtonPressed;
-            helper.Events.Input.ButtonReleased += OnButtonReleased;
 
-            // Initialize button bounds (top-right corner) - will be updated when game loads
+            // Initialize button bounds (top-left corner for visibility)
             petConfigButtonBounds = new Rectangle(10, 10, 64, 64);
         }
 
@@ -58,15 +56,12 @@ namespace Kiyomi_s_Instant_Pet
             if (!Context.IsWorldReady || Game1.activeClickableMenu != null)
                 return;
 
-            // Calculate opacity based on dragging state
-            float opacity = isDraggingButton ? 0.5f : 1f;
-
-            // Draw the pet icon with adjusted opacity
+            // Draw the pet icon
             e.SpriteBatch.Draw(
                 Game1.mouseCursors,
                 new Vector2(petConfigButtonBounds.X, petConfigButtonBounds.Y),
                 new Rectangle(160, 208, 16, 16), // Dog icon
-                Color.White * opacity,
+                Color.White,
                 0f,
                 Vector2.Zero,
                 4f, // Scale to 64x64
@@ -79,9 +74,16 @@ namespace Kiyomi_s_Instant_Pet
             int mouseY = Game1.getMouseY();
             if (petConfigButtonBounds.Contains(mouseX, mouseY))
             {
+                // Draw subtle glow effect
+                e.SpriteBatch.Draw(
+                    Game1.fadeToBlackRect,
+                    petConfigButtonBounds,
+                    Color.White * 0.2f
+                );
+
                 IClickableMenu.drawHoverText(
                     e.SpriteBatch,
-                    isDraggingButton ? "Move Pet Button" : "Configure Pet (Right-click to move)",
+                    "Configure Pet",
                     Game1.smallFont
                 );
             }
@@ -110,7 +112,13 @@ namespace Kiyomi_s_Instant_Pet
 
         private void OpenPetConfigMenu()
         {
-            Game1.activeClickableMenu = new PetConfigMenu(Config, OnConfigSaved);
+            Game1.activeClickableMenu = new PetConfigMenu(Config, OnConfigSaved, OnSpawnPetRequested);
+        }
+
+        private void OnSpawnPetRequested()
+        {
+            Monitor.Log("Spawn Pet button clicked! Spawning pet...", LogLevel.Info);
+            AddPetToFarm();
         }
 
         private void OnConfigSaved(ModConfig newConfig)
@@ -119,21 +127,50 @@ namespace Kiyomi_s_Instant_Pet
             Helper.WriteConfig(Config);
             Monitor.Log($"Pet config saved: {Config.PetType} named {Config.PetName}", LogLevel.Info);
 
-            // Update existing pet if one exists
-            UpdateExistingPet();
+            // Check if pet type or name changed
+            UpdateOrReplacePet();
         }
 
-        private void UpdateExistingPet()
+        private void UpdateOrReplacePet()
         {
+            Pet existingPet = null;
+
+            // Find existing pet
             foreach (var character in Game1.getFarm().characters)
             {
                 if (character is Pet pet)
                 {
-                    pet.Name = Config.PetName;
-                    pet.displayName = Config.PetName;
-                    Monitor.Log($"Updated existing pet name to {Config.PetName}", LogLevel.Info);
-                    return;
+                    existingPet = pet;
+                    break;
                 }
+            }
+
+            if (existingPet == null)
+            {
+                Monitor.Log("No existing pet found to update.", LogLevel.Debug);
+                return;
+            }
+
+            // Check if pet type changed
+            string currentPetType = existingPet.petType.Value;
+            bool typeChanged = !currentPetType.Equals(Config.PetType, StringComparison.OrdinalIgnoreCase);
+
+            if (typeChanged)
+            {
+                Monitor.Log($"Pet type changed from {currentPetType} to {Config.PetType}. Replacing pet...", LogLevel.Info);
+
+                // Remove old pet
+                Game1.getFarm().characters.Remove(existingPet);
+
+                // Spawn new pet at player's location
+                AddPetToFarm();
+            }
+            else
+            {
+                // Just update the name
+                existingPet.Name = Config.PetName;
+                existingPet.displayName = Config.PetName;
+                Monitor.Log($"Updated existing pet name to {Config.PetName}", LogLevel.Info);
             }
         }
 
@@ -144,23 +181,50 @@ namespace Kiyomi_s_Instant_Pet
                 string petType = Config.PetType.Trim();
                 string petName = Config.PetName ?? "Pet";
 
-                // Get player's current location and tile position
-                GameLocation currentLocation = Game1.player.currentLocation;
-                int playerTileX = (int)(Game1.player.Position.X / 64f);
-                int playerTileY = (int)(Game1.player.Position.Y / 64f);
-
-                // Find a valid spawn location within 3x3 around the player
-                Vector2? validTile = FindValidSpawnTile(currentLocation, playerTileX, playerTileY);
-
-                if (!validTile.HasValue)
+                // Get or create pet bowl
+                var petBowl = GetOrCreatePetBowl();
+                if (petBowl == null)
                 {
-                    Monitor.Log("No valid spawn location found within 3x3 area around player.", LogLevel.Warn);
-                    Game1.drawObjectDialogue("There's not enough room to spawn your pet here!");
+                    Monitor.Log("Failed to create or find pet bowl!", LogLevel.Error);
+                    Game1.drawObjectDialogue("Failed to set up pet bowl!");
                     return;
                 }
 
-                int spawnX = (int)validTile.Value.X;
-                int spawnY = (int)validTile.Value.Y;
+                int spawnX, spawnY;
+
+                // Check if player is on the farm
+                if (Game1.player.currentLocation is Farm)
+                {
+                    Monitor.Log("Player is on farm. Attempting to spawn pet near player...", LogLevel.Debug);
+
+                    // Try to find valid tile near player
+                    int playerTileX = (int)(Game1.player.Position.X / 64f);
+                    int playerTileY = (int)(Game1.player.Position.Y / 64f);
+                    Vector2? validTile = FindValidSpawnTile(Game1.getFarm(), playerTileX, playerTileY);
+
+                    if (validTile.HasValue)
+                    {
+                        spawnX = (int)validTile.Value.X;
+                        spawnY = (int)validTile.Value.Y;
+                        Monitor.Log($"Spawning pet near player at ({spawnX}, {spawnY})", LogLevel.Debug);
+                    }
+                    else
+                    {
+                        // Fallback to bowl location if no valid spot near player
+                        Monitor.Log("No valid spawn location near player, using bowl location", LogLevel.Debug);
+                        Point bowlPoint = petBowl.GetPetSpot();
+                        spawnX = bowlPoint.X;
+                        spawnY = bowlPoint.Y;
+                    }
+                }
+                else
+                {
+                    // Player is not on farm, spawn at bowl
+                    Monitor.Log("Player is not on farm. Spawning pet at bowl location.", LogLevel.Debug);
+                    Point bowlPoint = petBowl.GetPetSpot();
+                    spawnX = bowlPoint.X;
+                    spawnY = bowlPoint.Y;
+                }
 
                 Pet pet;
 
@@ -199,15 +263,57 @@ namespace Kiyomi_s_Instant_Pet
                 pet.displayName = petName;
                 pet.Manners = 0;
 
-                // Add pet to current location (not just farm)
-                currentLocation.characters.Add(pet);
+                // Link pet to bowl
+                petBowl.AssignPet(pet);
 
-                Monitor.Log($"Successfully added {pet.displayName} ({Game1.player.whichPetType}) at ({spawnX}, {spawnY}) in {currentLocation.Name}!", LogLevel.Info);
-                Game1.drawObjectDialogue($"Your pet {pet.displayName} has appeared!");
+                // Add pet to the farm
+                Game1.getFarm().characters.Add(pet);
+
+                Monitor.Log($"Successfully added {pet.displayName} ({Game1.player.whichPetType}) to the farm at ({spawnX}, {spawnY})!", LogLevel.Info);
+                Game1.drawObjectDialogue($"Your pet {pet.displayName} has appeared on the farm!");
             }
             catch (Exception ex)
             {
                 Monitor.Log($"Error adding pet: {ex.Message}", LogLevel.Error);
+            }
+        }
+
+        private StardewValley.Buildings.PetBowl GetOrCreatePetBowl()
+        {
+            try
+            {
+                Farm farm = Game1.getFarm();
+
+                // Check if a pet bowl already exists
+                foreach (var building in farm.buildings)
+                {
+                    if (building is StardewValley.Buildings.PetBowl bowl)
+                    {
+                        Monitor.Log($"Found existing pet bowl at ({bowl.tileX.Value}, {bowl.tileY.Value})", LogLevel.Debug);
+                        return bowl;
+                    }
+                }
+
+                // No bowl exists, create one at default location
+                Monitor.Log("No pet bowl found. Creating new bowl at default location...", LogLevel.Info);
+
+                // Default pet bowl location (same as vanilla - near farmhouse)
+                int bowlX = 54;
+                int bowlY = 7;
+
+                // Create the pet bowl building
+                var petBowl = new StardewValley.Buildings.PetBowl(new Vector2(bowlX, bowlY));
+
+                // Add to farm
+                farm.buildings.Add(petBowl);
+
+                Monitor.Log($"Created pet bowl at ({bowlX}, {bowlY})", LogLevel.Info);
+                return petBowl;
+            }
+            catch (Exception ex)
+            {
+                Monitor.Log($"Error in GetOrCreatePetBowl: {ex.Message}", LogLevel.Error);
+                return null;
             }
         }
 
