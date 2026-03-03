@@ -117,7 +117,20 @@ namespace Kiyomi_s_Instant_Pet
 
         private void OnSpawnPetRequested()
         {
-            Monitor.Log("Spawn Pet button clicked! Spawning pet...", LogLevel.Info);
+            Monitor.Log("Spawn Pet button clicked! Checking if allowed...", LogLevel.Info);
+
+            // Check if player already has a pet
+            bool hasPet = Game1.player.hasPet();
+
+            if (hasPet && !Config.AllowMultiplePets)
+            {
+                Monitor.Log("Player already has a pet and multiple pets not allowed.", LogLevel.Warn);
+                Game1.drawObjectDialogue("You need to allow multiple pets to adopt another pet!\n\nCheck the 'Allow Multiple Pets' box in the config menu.");
+                Game1.playSound("cancel");
+                return;
+            }
+
+            Monitor.Log("Spawning pet...", LogLevel.Info);
             AddPetToFarm();
         }
 
