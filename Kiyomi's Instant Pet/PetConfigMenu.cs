@@ -14,14 +14,14 @@ namespace Kiyomi_s_Instant_Pet
         private Action<ModConfig> OnSave;
         private Action SpawnPetAction;
 
-        private TextBox nameTextBox;
-        private ClickableComponent nameTextBoxCC;
+        private TextBox nameTextBox = null!;
+        private ClickableComponent nameTextBoxCC = null!;
 
-        private ClickableTextureComponent dogButton;
-        private ClickableTextureComponent catButton;
-        private ClickableTextureComponent okButton;
-        private ClickableTextureComponent spawnPetButton;
-        private ClickableTextureComponent allowMultiplePetsCheckbox;
+        private ClickableTextureComponent dogButton = null!;
+        private ClickableTextureComponent catButton = null!;
+        private ClickableTextureComponent okButton = null!;
+        private ClickableTextureComponent spawnPetButton = null!;
+        private ClickableTextureComponent allowMultiplePetsCheckbox = null!;
 
         private string selectedPetType;
         private bool isNameBoxSelected = false;
@@ -103,7 +103,7 @@ namespace Kiyomi_s_Instant_Pet
             Vector2 allowMultipleLabelSize = Game1.smallFont.MeasureString(allowMultipleLabel);
             int totalCheckboxWidth = 36 + 10 + (int)allowMultipleLabelSize.X;
             int centeredCheckboxX = xPositionOnScreen + (width / 2) - (totalCheckboxWidth / 2);
-            
+
             allowMultiplePetsCheckbox = new ClickableTextureComponent(
                 new Rectangle(centeredCheckboxX, yPositionOnScreen + 427, 36, 36),
                 Game1.mouseCursors,
@@ -173,7 +173,7 @@ namespace Kiyomi_s_Instant_Pet
             {
                 allowMultiplePets = !allowMultiplePets;
                 // Update checkbox appearance
-                allowMultiplePetsCheckbox.sourceRect = allowMultiplePets ? 
+                allowMultiplePetsCheckbox.sourceRect = allowMultiplePets ?
                     new Rectangle(236, 425, 9, 9) : new Rectangle(227, 425, 9, 9);
                 Game1.playSound("drumkit6");
             }
@@ -268,16 +268,16 @@ namespace Kiyomi_s_Instant_Pet
             spawnPetButton.draw(b);
 
             // Draw label for spawn button
-            string spawnLabel = "Spawn New Pet";
+            string spawnLabel = "Adopt Another Pet";
             Vector2 spawnLabelSize = Game1.smallFont.MeasureString(spawnLabel);
-            b.DrawString(Game1.smallFont, spawnLabel, 
-                new Vector2(xPositionOnScreen + (width / 2) - (spawnLabelSize.X / 2), spawnPetButton.bounds.Y + 85), 
+            b.DrawString(Game1.smallFont, spawnLabel,
+                new Vector2(xPositionOnScreen + (width / 2) - (spawnLabelSize.X / 2), spawnPetButton.bounds.Y + 85),
                 Game1.textColor);
 
             // Draw hover tooltip for spawn button
             if (spawnPetButton.containsPoint(Game1.getMouseX(), Game1.getMouseY()))
             {
-                IClickableMenu.drawHoverText(b, "Spawn a new pet instantly\n(Use if pet was removed)", Game1.smallFont);
+                IClickableMenu.drawHoverText(b, "Adopt a new pet instantly\n(Use if pet was removed)", Game1.smallFont);
             }
 
             // Draw Allow Multiple Pets checkbox (centered)
@@ -285,10 +285,10 @@ namespace Kiyomi_s_Instant_Pet
             Vector2 allowMultipleLabelSize = Game1.smallFont.MeasureString(allowMultipleLabel);
             int totalCheckboxWidth = 36 + 10 + (int)allowMultipleLabelSize.X; // checkbox + spacing + text
             int centeredCheckboxX = xPositionOnScreen + (width / 2) - (totalCheckboxWidth / 2);
-            
+
             allowMultiplePetsCheckbox.draw(b);
-            b.DrawString(Game1.smallFont, allowMultipleLabel, 
-                new Vector2(centeredCheckboxX + 36 + 10, allowMultiplePetsCheckbox.bounds.Y + 8), 
+            b.DrawString(Game1.smallFont, allowMultipleLabel,
+                new Vector2(centeredCheckboxX + 36 + 10, allowMultiplePetsCheckbox.bounds.Y + 8),
                 Game1.textColor);
 
             // Draw OK button
