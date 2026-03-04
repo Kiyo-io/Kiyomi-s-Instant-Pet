@@ -197,6 +197,7 @@ namespace Kiyomi_s_Instant_Pet
             {
                 nameTextBox.RecieveCommandInput('\0');
             }
+
         }
 
         public override void performHoverAction(int x, int y)

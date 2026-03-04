@@ -1,5 +1,4 @@
-﻿using System;
-using HarmonyLib;
+﻿using HarmonyLib;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using StardewModdingAPI;
@@ -9,6 +8,8 @@ using StardewValley;
 using StardewValley.Characters;
 using StardewValley.GameData.Pets;
 using StardewValley.Menus;
+using System;
+using static Kiyomi_s_Instant_Pet.PetRegistry;
 
 namespace Kiyomi_s_Instant_Pet
 {
@@ -17,10 +18,15 @@ namespace Kiyomi_s_Instant_Pet
         private static IMonitor ModMonitor;
         private ModConfig Config;
         private Rectangle petConfigButtonBounds;
+        internal List<InstantPetData> PetBank = new();
+        public static ModEntry Instance =null!;
+        public InstantPetRegistry Registry = new();
+
 
         public override void Entry(IModHelper helper)
         {
             ModMonitor = Monitor;
+            Instance = this;
 
             Config = helper.ReadConfig<ModConfig>();
 
@@ -30,9 +36,37 @@ namespace Kiyomi_s_Instant_Pet
             helper.Events.GameLoop.SaveLoaded += OnSaveLoaded;
             helper.Events.Display.RenderedHud += OnRenderedHud;
             helper.Events.Input.ButtonPressed += OnButtonPressed;
+            helper.Events.GameLoop.Saving += OnSaving;
 
             // Initialize button bounds (top-left corner for visibility)
             petConfigButtonBounds = new Rectangle(10, 10, 64, 64);
+            
+        
+        }
+        // This method is called by other mods to get the API instance
+        //Now other mods can do:
+
+        //var api = helper.ModRegistry
+           // .GetApi<IInstantPetApi>("Kiyomi.InstantPet");
+
+       // api.RegisterPetType("LuckyFox","Lucky Fox",pet => Game1.player.DailyLuck += 0.05);
+        public override object GetApi()
+        {
+            return this;
+        }
+
+
+        public void RegisterPetType(
+    string petId,
+    string displayName,
+    Action<Pet> onInteract = null)
+        {
+            Registry.Pets[petId] = new RegisteredPet
+            {
+                Id = petId,
+                DisplayName = displayName,
+                OnInteract = onInteract
+            };
         }
 
         private void OnSaveLoaded(object sender, SaveLoadedEventArgs e)
@@ -40,18 +74,49 @@ namespace Kiyomi_s_Instant_Pet
             if (!Context.IsWorldReady)
                 return;
 
-            if (!Game1.player.hasPet())
-            {
-                Monitor.Log("No pet detected. Adding pet instantly...", LogLevel.Info);
-                AddPetToFarm();
-            }
-            else
-            {
-                Monitor.Log("Player already has a pet. No action needed.", LogLevel.Info);
-            }
+            // No auto-spawn - let Marnie's event handle vanilla adoption
+            // Players can manually spawn pets via the config menu button
+            Monitor.Log("Save loaded. Use the pet icon button to manually adopt pets.", LogLevel.Debug);
+
+            PetBank = Helper.Data.ReadSaveData<List<InstantPetData>>("InstantPets")
+                       ?? new List<InstantPetData>();
+
+            SpawnAllInstantPets();
         }
 
-        private void OnRenderedHud(object sender, RenderedHudEventArgs e)
+        private void OnSaving(object sender, SavingEventArgs e)
+        {
+            Helper.Data.WriteSaveData("InstantPets", PetBank);
+        }
+
+        internal void SpawnAllInstantPets()
+        {
+            foreach (var data in PetBank)
+                SpawnInstantPet(data);
+        }
+
+        internal void SpawnInstantPet(InstantPetData data)
+        {
+            var farm = Game1.getFarm();
+
+            // Prevent duplicate spawn (industry safety)
+            if (farm.characters.OfType<Pet>()
+                .Any(p => p.modData.ContainsKey("Kiyomi.InstantPetID")
+                       && p.modData["Kiyomi.InstantPetID"] == data.InstantPetID))
+                return;
+
+            Pet pet = new Pet((int)data.TilePosition.X, (int)data.TilePosition.Y, "0", data.PetType);
+
+            pet.Name = data.Name;
+
+            // ⭐ CRITICAL — persistence marker
+            pet.modData["Kiyomi.InstantPetID"] = data.InstantPetID;
+
+            farm.addCharacter(pet);
+        }
+
+
+        private void OnRenderedHud(object? sender, RenderedHudEventArgs e)
         {
             if (!Context.IsWorldReady || Game1.activeClickableMenu != null)
                 return;
@@ -117,18 +182,7 @@ namespace Kiyomi_s_Instant_Pet
 
         private void OnSpawnPetRequested()
         {
-            Monitor.Log("Spawn Pet button clicked! Checking if allowed...", LogLevel.Info);
 
-            // Check if player already has a pet
-            bool hasPet = Game1.player.hasPet();
-
-            if (hasPet && !Config.AllowMultiplePets)
-            {
-                Monitor.Log("Player already has a pet and multiple pets not allowed.", LogLevel.Warn);
-                Game1.drawObjectDialogue("You need to allow multiple pets to adopt another pet!\n\nCheck the 'Allow Multiple Pets' box in the config menu.");
-                Game1.playSound("cancel");
-                return;
-            }
 
             Monitor.Log("Spawning pet...", LogLevel.Info);
             AddPetToFarm();
@@ -151,7 +205,8 @@ namespace Kiyomi_s_Instant_Pet
             // Find existing pet
             foreach (var character in Game1.getFarm().characters)
             {
-                if (character is Pet pet)
+                if (character is Pet pet &&
+                    pet.modData.ContainsKey("Kiyomi.InstantPetID"))
                 {
                     existingPet = pet;
                     break;
@@ -191,8 +246,14 @@ namespace Kiyomi_s_Instant_Pet
         {
             try
             {
-                string petType = Config.PetType.Trim();
-                string petName = Config.PetName ?? "Pet";
+                // Check if multiple pets are allowed
+                if (!Config.AllowMultiplePets)
+                {
+                    // Count existing mod-spawned pets
+                    int existingModPetsCount =
+    Game1.getFarm().characters.Count(c =>
+        c is Pet pet &&
+        pet.modData.ContainsKey("Kiyomi.InstantPetID"));
 
                 // Get or create pet bowl
                 var petBowl = GetOrCreatePetBowl();
@@ -276,13 +337,24 @@ namespace Kiyomi_s_Instant_Pet
                 pet.displayName = petName;
                 pet.Manners = 0;
 
-                // Link pet to bowl
-                petBowl.AssignPet(pet);
+
+
+
+                // Track this as a mod-spawned pet
+                pet.modData["Kiyomi.InstantPetID"] =
+        Guid.NewGuid().ToString();
+
+                Monitor.Log(
+                    $"Registered Instant Pet ID: {pet.modData["Kiyomi.InstantPetID"]}",
+                    LogLevel.Debug
+                );
+
+
 
                 // Add pet to the farm
                 Game1.getFarm().characters.Add(pet);
 
-                Monitor.Log($"Successfully added {pet.displayName} ({Game1.player.whichPetType}) to the farm at ({spawnX}, {spawnY})!", LogLevel.Info);
+                Monitor.Log($"Successfully added {pet.displayName} ({pet.petType.Value}) to the farm at ({spawnX}, {spawnY})!", LogLevel.Info);
                 Game1.drawObjectDialogue($"Your pet {pet.displayName} has appeared on the farm!");
             }
             catch (Exception ex)
