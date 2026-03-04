@@ -10,7 +10,7 @@ namespace Kiyomi_s_Instant_Pet
 {
     internal class IsInstantPet : InstantPetData
     {
-        private bool InstantPetData(Pet pet)
+        private bool HasInstantPetData(Pet pet)
         {
             return pet.modData.ContainsKey("Kiyomi.InstantPetID");
         }
@@ -21,5 +21,5 @@ namespace Kiyomi_s_Instant_Pet
                 ModEntry.Instance.SpawnInstantPet(data);
         }
     }
-   }
+}
 

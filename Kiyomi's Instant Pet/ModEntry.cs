@@ -17,6 +17,8 @@ namespace Kiyomi_s_Instant_Pet
         private static IMonitor ModMonitor = null!;
         private ModConfig Config = null!;
         private Rectangle petConfigButtonBounds;
+        internal List<InstantPetData> PetBank = new();
+        internal static ModEntry Instance = null!;
 
         public override void Entry(IModHelper helper)
         {
@@ -28,21 +30,31 @@ namespace Kiyomi_s_Instant_Pet
             InstantPetPatches.ApplyPatches(harmony, Monitor);
 
             helper.Events.GameLoop.SaveLoaded += OnSaveLoaded;
+            helper.Events.GameLoop.Saving += OnSaving;
             helper.Events.Display.RenderedHud += OnRenderedHud;
             helper.Events.Input.ButtonPressed += OnButtonPressed;
+
+            Instance = this;
 
             // Initialize button bounds (top-left corner for visibility)
             petConfigButtonBounds = new Rectangle(10, 10, 64, 64);
         }
 
-        private void OnSaveLoaded(object? sender, SaveLoadedEventArgs e)
+        private void OnSaveLoaded(object sender, SaveLoadedEventArgs e)
         {
-            if (!Context.IsWorldReady)
-                return;
+            Monitor.Log("Save loaded. Use the pet icon button to manually adopt pets.");
 
-            // No auto-spawn - let Marnie's event handle vanilla adoption
-            // Players can manually spawn pets via the config menu button
-            Monitor.Log("Save loaded. Use the pet icon button to manually adopt pets.", LogLevel.Debug);
+
+           PetBank = Helper.Data.ReadSaveData<List<InstantPetData>>("InstantPets")
+                       ?? new List<InstantPetData>();
+
+            SpawnAllInstantPets();
+        }
+
+
+        private void OnSaving(object sender, SavingEventArgs e)
+        {
+            Helper.Data.WriteSaveData("InstantPets", PetBank);
         }
 
         private void OnRenderedHud(object? sender, RenderedHudEventArgs e)
@@ -103,6 +115,33 @@ namespace Kiyomi_s_Instant_Pet
                 }
             }
         }
+
+        private void SpawnAllInstantPets()
+        {
+            foreach (var data in PetBank)
+                SpawnInstantPet(data);
+        }
+
+        internal void SpawnInstantPet(InstantPetData data)
+        {
+            var farm = Game1.getFarm();
+
+            // Prevent duplicate spawn (industry safety)
+            if (farm.characters.OfType<Pet>()
+                .Any(p => p.modData.ContainsKey("Kiyomi.InstantPetID")
+                       && p.modData["Kiyomi.InstantPetID"] == data.InstantPetID))
+                return;
+
+            Pet pet = new Pet((int)data.TilePosition.X, (int)data.TilePosition.Y, "0", data.PetType);
+
+            pet.Name = data.Name;
+
+            // ⭐ CRITICAL — persistence marker
+            pet.modData["Kiyomi.InstantPetID"] = data.InstantPetID;
+
+            farm.addCharacter(pet);
+        }
+
 
         private void OpenPetConfigMenu()
         {
