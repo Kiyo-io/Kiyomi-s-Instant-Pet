@@ -2,9 +2,11 @@
   "Name": "Kiyomi's Instant Pet",
   "Author": "KiyomiKhaos",
   "Version": "1.0.0",
-  "Description": "Allows you to add a pet to your farm instantly , useful if you orginally declined Marine's pet adaoption and changed your mind, or if you prefer not to wait on Marine at the beginning of a new save",
+  "Description": "Allows you to adopt pets instantly from anywhere in Stardew Valley",
   "UniqueID": "KiyomiKhaos.InstantPet",
   "EntryDll": "Kiyomi's Instant Pet.dll",
   "MinimumApiVersion": "4.0.0",
-  "UpdateKeys": []
+  "UpdateKeys": [
+    
+  ]
 }
