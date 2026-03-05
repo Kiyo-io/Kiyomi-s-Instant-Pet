@@ -20,6 +20,7 @@ namespace Kiyomi_s_Instant_Pet
         internal List<InstantPetData> PetBank = new();
         internal static ModEntry Instance = null!;
 
+
         public override void Entry(IModHelper helper)
         {
             ModMonitor = Monitor;
@@ -116,6 +117,12 @@ namespace Kiyomi_s_Instant_Pet
             }
         }
 
+
+
+
+
+
+        //Work together with OnSaveLoad() to store pet data in PetBank and then recall the Pets when SpawnInstantPet() is called with the SpawnAllInstantPets() in OnSaveLoaded()
         private void SpawnAllInstantPets()
         {
             foreach (var data in PetBank)
@@ -141,6 +148,12 @@ namespace Kiyomi_s_Instant_Pet
 
             farm.addCharacter(pet);
         }
+        //Work together with OnSaveLoad() to store pet data in PetBank and then recall the Pets when the method SpawnInstantPet is called with the Instantpet Data in OnSaveLoaded()
+
+
+
+
+
 
 
         private void OpenPetConfigMenu()
@@ -150,9 +163,9 @@ namespace Kiyomi_s_Instant_Pet
 
         private void OnSpawnPetRequested()
         {
-          
 
             Monitor.Log("Spawn Pet button clicked! Spawning pet...", LogLevel.Info);
+            
             AddPetToFarm();
         }
 
@@ -215,13 +228,12 @@ namespace Kiyomi_s_Instant_Pet
         private void AddPetToFarm()
         {
             try
-            {
-                // Check if multiple pets are allowed
+            {// Check if multiple pets are allowed
                 if (!Config.AllowMultiplePets)
                 {
                     // Count existing mod-spawned pets
                     int existingModPetsCount = Game1.getFarm().characters.Count(c =>
-                        c is Pet pet && InstantPetPatches.ModSpawnedPets.Contains($"{pet.Name}_{pet.GetType().Name}"));
+                        c is Pet pet && pet.modData.ContainsKey("Kiyomi.InstantPetID"));
 
                     if (existingModPetsCount > 0)
                     {
@@ -229,98 +241,101 @@ namespace Kiyomi_s_Instant_Pet
                         Game1.addHUDMessage(new HUDMessage("Cannot adopt: Multiple pets not allowed (check config menu)", HUDMessage.error_type));
                         return;
                     }
-                }
-
-                string petType = Config.PetType.Trim();
-                string petName = Config.PetName ?? "Pet";
 
 
-                int spawnX, spawnY;
+                    string petType = Config.PetType.Trim();
+                    string petName = Config.PetName ?? "Pet";
 
-                // Check if player is on the farm
-                if (Game1.player.currentLocation is Farm farm)
-                {
-                    Monitor.Log("Player is on farm. Attempting to spawn pet near player...", LogLevel.Debug);
 
-                    // Try to find valid tile near player
-                    int playerTileX = (int)(Game1.player.Position.X / 64f);
-                    int playerTileY = (int)(Game1.player.Position.Y / 64f);
-                    Vector2? validTile = FindValidSpawnTile(farm, playerTileX, playerTileY);
+                    int spawnX, spawnY;
 
-                    if (validTile.HasValue)
+
+
+                    // Check if player is on the farm
+                    if (Game1.player.currentLocation is Farm farm)
                     {
-                        spawnX = (int)validTile.Value.X;
-                        spawnY = (int)validTile.Value.Y;
-                        Monitor.Log($"Spawning pet near player at ({spawnX}, {spawnY})", LogLevel.Debug);
+                        Monitor.Log("Player is on farm. Attempting to spawn pet near player...", LogLevel.Debug);
+
+                        // Try to find valid tile near player
+                        int playerTileX = (int)(Game1.player.Position.X / 64f);
+                        int playerTileY = (int)(Game1.player.Position.Y / 64f);
+                        Vector2? validTile = FindValidSpawnTile(farm, playerTileX, playerTileY);
+
+                        if (validTile.HasValue)
+                        {
+                            spawnX = (int)validTile.Value.X;
+                            spawnY = (int)validTile.Value.Y;
+                            Monitor.Log($"Spawning pet near player at ({spawnX}, {spawnY})", LogLevel.Debug);
+                        }
+                        else
+                        {
+                            // No valid spot near player, spawn at farmhouse entrance
+                            Monitor.Log("No valid spawn location near player, using farmhouse entrance", LogLevel.Debug);
+                            Point farmhouseEntry = farm.GetMainFarmHouseEntry();
+                            spawnX = farmhouseEntry.X;
+                            spawnY = farmhouseEntry.Y + 1;
+                        }
                     }
                     else
                     {
-                        // No valid spot near player, spawn at farmhouse entrance
-                        Monitor.Log("No valid spawn location near player, using farmhouse entrance", LogLevel.Debug);
-                        Point farmhouseEntry = farm.GetMainFarmHouseEntry();
+                        // Player is not on farm, spawn at farmhouse entrance
+                        Monitor.Log("Player is not on farm. Spawning pet at farmhouse entrance.", LogLevel.Debug);
+                        Farm farmLocation = Game1.getFarm();
+                        Point farmhouseEntry = farmLocation.GetMainFarmHouseEntry();
                         spawnX = farmhouseEntry.X;
                         spawnY = farmhouseEntry.Y + 1;
                     }
-                }
-                else
-                {
-                    // Player is not on farm, spawn at farmhouse entrance
-                    Monitor.Log("Player is not on farm. Spawning pet at farmhouse entrance.", LogLevel.Debug);
-                    Farm farmLocation = Game1.getFarm();
-                    Point farmhouseEntry = farmLocation.GetMainFarmHouseEntry();
-                    spawnX = farmhouseEntry.X;
-                    spawnY = farmhouseEntry.Y + 1;
-                }
 
-                Pet pet;
+                    Pet pet;
 
 
-                if (petType.Equals("Cat", StringComparison.OrdinalIgnoreCase))
-                {
-                    pet = new Pet(spawnX, spawnY, "0", "Cat");
-                    if (string.IsNullOrWhiteSpace(petName) || petName == "Max")
+                    if (petType.Equals("Cat", StringComparison.OrdinalIgnoreCase))
                     {
-                        petName = "Ruby";
+                        pet = new Pet(spawnX, spawnY, "0", "Cat");
+                        if (string.IsNullOrWhiteSpace(petName) || petName == "Max")
+                        {
+                            petName = "Ruby";
+                        }
+                        Monitor.Log("Adding cat...", LogLevel.Debug);
                     }
-                    Monitor.Log("Adding cat...", LogLevel.Debug);
-                }
-                else if (petType.Equals("Dog", StringComparison.OrdinalIgnoreCase))
-                {
-                    pet = new Pet(spawnX, spawnY, "0", "Dog");
-                    if (string.IsNullOrWhiteSpace(petName) || petName == "Ruby")
+                    else if (petType.Equals("Dog", StringComparison.OrdinalIgnoreCase))
                     {
-                        petName = "Max";
+                        pet = new Pet(spawnX, spawnY, "0", "Dog");
+                        if (string.IsNullOrWhiteSpace(petName) || petName == "Ruby")
+                        {
+                            petName = "Max";
+                        }
+                        Monitor.Log("Adding dog...", LogLevel.Debug);
                     }
-                    Monitor.Log("Adding dog...", LogLevel.Debug);
-                }
-                else
-                {
-                    Monitor.Log($"Invalid PetType '{petType}' in config. Defaulting to Dog.", LogLevel.Warn);
-                    pet = new Pet(spawnX, spawnY, "0", "Dog");
-                    if (string.IsNullOrWhiteSpace(petName))
+                    else
                     {
-                        petName = "Max";
+                        Monitor.Log($"Invalid PetType '{petType}' in config. Defaulting to Dog.", LogLevel.Warn);
+                        pet = new Pet(spawnX, spawnY, "0", "Dog");
+                        if (string.IsNullOrWhiteSpace(petName))
+                        {
+                            petName = "Max";
+                        }
                     }
+
+                    pet.Name = petName;
+                    pet.displayName = petName;
+                    pet.Manners = 0;
+
+                    pet.modData["Kiyomi.InstantPetID"] =
+        Guid.NewGuid().ToString();
+
+                    Monitor.Log(
+                        $"Registered Instant Pet ID: {pet.modData["Kiyomi.InstantPetID"]}",
+                        LogLevel.Debug
+                    );
+
+
+                    // Add pet to the farm
+                    Game1.getFarm().characters.Add(pet);
+
+                    Monitor.Log($"Successfully added {pet.displayName} ({pet.petType.Value}) to the farm at ({spawnX}, {spawnY})!", LogLevel.Info);
+                    Game1.drawObjectDialogue($"Your pet {pet.displayName} has appeared on the farm!");
                 }
-
-                pet.Name = petName;
-                pet.displayName = petName;
-                pet.Manners = 0;
-
-                pet.modData["Kiyomi.InstantPetID"] =
-    Guid.NewGuid().ToString();
-
-                Monitor.Log(
-                    $"Registered Instant Pet ID: {pet.modData["Kiyomi.InstantPetID"]}",
-                    LogLevel.Debug
-                );
-
-
-                // Add pet to the farm
-                Game1.getFarm().characters.Add(pet);
-
-                Monitor.Log($"Successfully added {pet.displayName} ({pet.petType.Value}) to the farm at ({spawnX}, {spawnY})!", LogLevel.Info);
-                Game1.drawObjectDialogue($"Your pet {pet.displayName} has appeared on the farm!");
             }
             catch (Exception ex)
             {

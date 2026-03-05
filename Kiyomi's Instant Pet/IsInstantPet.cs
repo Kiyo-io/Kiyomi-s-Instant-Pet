@@ -10,12 +10,12 @@ namespace Kiyomi_s_Instant_Pet
 {
     internal class IsInstantPet : InstantPetData
     {
-        private bool HasInstantPetData(Pet pet)
+        internal bool HasInstantPetData(Pet pet)
         {
             return pet.modData.ContainsKey("Kiyomi.InstantPetID");
         }
 
-        private void SpawnAllInstantPets()
+        internal void SpawnAllInstantPets()
         {
             foreach (var data in ModEntry.Instance.PetBank)
                 ModEntry.Instance.SpawnInstantPet(data);

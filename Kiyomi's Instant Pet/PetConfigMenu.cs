@@ -112,6 +112,7 @@ namespace Kiyomi_s_Instant_Pet
             {
                 name = "AllowMultiplePetsCheckbox"
             };
+           
         }
 
         public override void receiveLeftClick(int x, int y, bool playSound = true)
