@@ -2,5 +2,7 @@
   "config.petType.name": "Pet Type",
   "config.petType.description": "Choose whether you want a Dog or Cat.",
   "config.petName.name": "Pet Name",
-  "config.petName.description": "The name of your pet."
+  "config.petName.description": "The name of your pet.",
+  "config.allowMultiplePets.name": "Allow Multiple Pets",
+  "config.allowMultiplePets.description": "Enable to adopt multiple pets on your farm."
 }

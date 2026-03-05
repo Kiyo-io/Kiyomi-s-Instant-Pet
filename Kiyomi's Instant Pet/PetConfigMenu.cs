@@ -14,35 +14,30 @@ namespace Kiyomi_s_Instant_Pet
         private Action<ModConfig> OnSave;
         private Action SpawnPetAction;
 
-        private TextBox nameTextBox;
-        private ClickableComponent nameTextBoxCC;
+        private TextBox nameTextBox = null!;
+        private ClickableComponent nameTextBoxCC = null!;
 
-        private ClickableTextureComponent dogButton;
-        private ClickableTextureComponent catButton;
-        private ClickableTextureComponent okButton;
-        private ClickableTextureComponent spawnPetButton;
+        private ClickableTextureComponent dogButton = null!;
+        private ClickableTextureComponent catButton = null!;
+        private ClickableTextureComponent okButton = null!;
+        private ClickableTextureComponent spawnPetButton = null!;
+        private ClickableTextureComponent allowMultiplePetsCheckbox = null!;
 
         private string selectedPetType;
         private bool isNameBoxSelected = false;
-
-        // Drag support
-        private bool isDragging = false;
-        private Point dragOffset;
-        private Rectangle titleBarBounds;
+        private bool allowMultiplePets;
 
         public PetConfigMenu(ModConfig config, Action<ModConfig> onSave, Action spawnPetAction) : base(
-            (Game1.uiViewport.Width - 600) / 2,
-            (Game1.uiViewport.Height - 450) / 2,
-            600,
-            450)
+            (Game1.uiViewport.Width - 640) / 2,
+            (Game1.uiViewport.Height - 540) / 2,
+            640,
+            540)
         {
             Config = config;
             OnSave = onSave;
             SpawnPetAction = spawnPetAction;
             selectedPetType = config.PetType;
-
-            // Define title bar for dragging (top 64 pixels of the menu)
-            titleBarBounds = new Rectangle(xPositionOnScreen, yPositionOnScreen, width, 64);
+            allowMultiplePets = config.AllowMultiplePets;
 
             UpdateComponentPositions();
             nameTextBox.Text = config.PetName;
@@ -50,9 +45,6 @@ namespace Kiyomi_s_Instant_Pet
 
         private void UpdateComponentPositions()
         {
-            // Update title bar
-            titleBarBounds = new Rectangle(xPositionOnScreen, yPositionOnScreen, width, 64);
-
             // Name textbox
             nameTextBox = new TextBox(Game1.content.Load<Texture2D>("LooseSprites\\textBox"), null, Game1.smallFont, Game1.textColor)
             {
@@ -66,9 +58,9 @@ namespace Kiyomi_s_Instant_Pet
                 "nameTextBox"
             );
 
-            // Dog button
+            // Dog button (centered layout, 68 pixels left of center + button width, moved 10px right)
             dogButton = new ClickableTextureComponent(
-                new Rectangle(xPositionOnScreen + 150, yPositionOnScreen + 200, 64, 64),
+                new Rectangle(xPositionOnScreen + (width / 2) - 122, yPositionOnScreen + 200, 64, 64),
                 Game1.mouseCursors,
                 new Rectangle(160, 208, 16, 16),
                 4f)
@@ -76,9 +68,9 @@ namespace Kiyomi_s_Instant_Pet
                 name = "Dog"
             };
 
-            // Cat button
+            // Cat button (centered layout, 68 pixels right of center)
             catButton = new ClickableTextureComponent(
-                new Rectangle(xPositionOnScreen + 350, yPositionOnScreen + 200, 64, 64),
+                new Rectangle(xPositionOnScreen + (width / 2) + 68, yPositionOnScreen + 200, 64, 64),
                 Game1.mouseCursors,
                 new Rectangle(192, 208, 16, 16),
                 4f)
@@ -105,19 +97,27 @@ namespace Kiyomi_s_Instant_Pet
             {
                 name = "SpawnPet"
             };
+
+            // Allow Multiple Pets checkbox (centered)
+            string allowMultipleLabel = "Allow Multiple Pets";
+            Vector2 allowMultipleLabelSize = Game1.smallFont.MeasureString(allowMultipleLabel);
+            int totalCheckboxWidth = 36 + 10 + (int)allowMultipleLabelSize.X;
+            int centeredCheckboxX = xPositionOnScreen + (width / 2) - (totalCheckboxWidth / 2);
+
+            allowMultiplePetsCheckbox = new ClickableTextureComponent(
+                new Rectangle(centeredCheckboxX, yPositionOnScreen + 427, 36, 36),
+                Game1.mouseCursors,
+                allowMultiplePets ? new Rectangle(236, 425, 9, 9) : new Rectangle(227, 425, 9, 9),
+                4f)
+            {
+                name = "AllowMultiplePetsCheckbox"
+            };
+           
         }
 
         public override void receiveLeftClick(int x, int y, bool playSound = true)
         {
             base.receiveLeftClick(x, y, playSound);
-
-            // Check if clicking on title bar to start dragging
-            if (titleBarBounds.Contains(x, y))
-            {
-                isDragging = true;
-                dragOffset = new Point(x - xPositionOnScreen, y - yPositionOnScreen);
-                return;
-            }
 
             // Check name textbox click
             if (nameTextBoxCC.containsPoint(x, y))
@@ -159,6 +159,7 @@ namespace Kiyomi_s_Instant_Pet
                 // Save current config first
                 Config.PetType = selectedPetType;
                 Config.PetName = string.IsNullOrWhiteSpace(nameTextBox.Text) ? (selectedPetType == "Cat" ? "Ruby" : "Max") : nameTextBox.Text;
+                Config.AllowMultiplePets = allowMultiplePets;
 
                 // Call spawn action
                 SpawnPetAction?.Invoke();
@@ -168,36 +169,21 @@ namespace Kiyomi_s_Instant_Pet
                 return;
             }
 
+            // Check Allow Multiple Pets checkbox
+            if (allowMultiplePetsCheckbox.containsPoint(x, y))
+            {
+                allowMultiplePets = !allowMultiplePets;
+                // Update checkbox appearance
+                allowMultiplePetsCheckbox.sourceRect = allowMultiplePets ?
+                    new Rectangle(236, 425, 9, 9) : new Rectangle(227, 425, 9, 9);
+                Game1.playSound("drumkit6");
+            }
+
             // Check OK button click
             if (okButton.containsPoint(x, y))
             {
                 SaveAndClose();
             }
-        }
-
-        public override void leftClickHeld(int x, int y)
-        {
-            base.leftClickHeld(x, y);
-
-            if (isDragging)
-            {
-                // Update menu position
-                xPositionOnScreen = x - dragOffset.X;
-                yPositionOnScreen = y - dragOffset.Y;
-
-                // Keep menu within screen bounds
-                xPositionOnScreen = Math.Max(0, Math.Min(xPositionOnScreen, Game1.uiViewport.Width - width));
-                yPositionOnScreen = Math.Max(0, Math.Min(yPositionOnScreen, Game1.uiViewport.Height - height));
-
-                // Update all component positions
-                UpdateComponentPositions();
-            }
-        }
-
-        public override void releaseLeftClick(int x, int y)
-        {
-            base.releaseLeftClick(x, y);
-            isDragging = false;
         }
 
         public override void receiveKeyPress(Keys key)
@@ -212,6 +198,7 @@ namespace Kiyomi_s_Instant_Pet
             {
                 nameTextBox.RecieveCommandInput('\0');
             }
+
         }
 
         public override void performHoverAction(int x, int y)
@@ -222,21 +209,17 @@ namespace Kiyomi_s_Instant_Pet
             catButton.tryHover(x, y, 0.25f);
             okButton.tryHover(x, y, 0.25f);
             spawnPetButton.tryHover(x, y, 0.25f);
-
-            // Change cursor when hovering over title bar
-            if (titleBarBounds.Contains(x, y) && !isDragging)
-            {
-                Game1.mouseCursor = 6; // Hand cursor
-            }
+            allowMultiplePetsCheckbox.tryHover(x, y, 0.25f);
         }
 
         private void SaveAndClose()
         {
             Config.PetType = selectedPetType;
             Config.PetName = string.IsNullOrWhiteSpace(nameTextBox.Text) ? "Pet" : nameTextBox.Text;
-            
+            Config.AllowMultiplePets = allowMultiplePets;
+
             OnSave?.Invoke(Config);
-            
+
             Game1.playSound("coin");
             exitThisMenu();
         }
@@ -249,25 +232,9 @@ namespace Kiyomi_s_Instant_Pet
             // Draw menu box
             Game1.drawDialogueBox(xPositionOnScreen, yPositionOnScreen, width, height, false, true);
 
-            // Highlight title bar if hovering (to show it's draggable)
-            int mouseX = Game1.getMouseX();
-            int mouseY = Game1.getMouseY();
-            if (titleBarBounds.Contains(mouseX, mouseY) || isDragging)
-            {
-                b.Draw(Game1.fadeToBlackRect, titleBarBounds, Color.White * 0.1f);
-            }
-
             // Draw title
             string title = "Configure Your Pet";
             SpriteText.drawStringHorizontallyCenteredAt(b, title, xPositionOnScreen + width / 2, yPositionOnScreen + 32);
-
-            // Draw drag hint
-            if (titleBarBounds.Contains(mouseX, mouseY) && !isDragging)
-            {
-                b.DrawString(Game1.tinyFont, "(Drag to move)", 
-                    new Vector2(xPositionOnScreen + 10, yPositionOnScreen + 10), 
-                    Color.Gray * 0.8f);
-            }
 
             // Draw "Name:" label
             b.DrawString(Game1.smallFont, "Pet Name:", new Vector2(xPositionOnScreen + 80, yPositionOnScreen + 130), Game1.textColor);
@@ -289,7 +256,6 @@ namespace Kiyomi_s_Instant_Pet
                     dogButton.bounds.X - 8, dogButton.bounds.Y - 8,
                     dogButton.bounds.Width + 16, dogButton.bounds.Height + 16,
                     Color.White, 4f);
-                b.DrawString(Game1.smallFont, "Dog", new Vector2(dogButton.bounds.X + 80, dogButton.bounds.Y + 20), Game1.textColor);
             }
             else if (selectedPetType == "Cat")
             {
@@ -297,24 +263,34 @@ namespace Kiyomi_s_Instant_Pet
                     catButton.bounds.X - 8, catButton.bounds.Y - 8,
                     catButton.bounds.Width + 16, catButton.bounds.Height + 16,
                     Color.White, 4f);
-                b.DrawString(Game1.smallFont, "Cat", new Vector2(catButton.bounds.X + 80, catButton.bounds.Y + 20), Game1.textColor);
             }
 
             // Draw Spawn Pet button
             spawnPetButton.draw(b);
 
             // Draw label for spawn button
-            string spawnLabel = "Spawn New Pet";
+            string spawnLabel = "Adopt Another Pet";
             Vector2 spawnLabelSize = Game1.smallFont.MeasureString(spawnLabel);
-            b.DrawString(Game1.smallFont, spawnLabel, 
-                new Vector2(xPositionOnScreen + (width / 2) - (spawnLabelSize.X / 2), spawnPetButton.bounds.Y + 85), 
+            b.DrawString(Game1.smallFont, spawnLabel,
+                new Vector2(xPositionOnScreen + (width / 2) - (spawnLabelSize.X / 2), spawnPetButton.bounds.Y + 85),
                 Game1.textColor);
 
             // Draw hover tooltip for spawn button
-            if (spawnPetButton.containsPoint(mouseX, mouseY))
+            if (spawnPetButton.containsPoint(Game1.getMouseX(), Game1.getMouseY()))
             {
-                IClickableMenu.drawHoverText(b, "Spawn a new pet instantly\n(Use if pet was removed)", Game1.smallFont);
+                IClickableMenu.drawHoverText(b, "Adopt a new pet instantly\n(Use if pet was removed)", Game1.smallFont);
             }
+
+            // Draw Allow Multiple Pets checkbox (centered)
+            string allowMultipleLabel = "Allow Multiple Pets";
+            Vector2 allowMultipleLabelSize = Game1.smallFont.MeasureString(allowMultipleLabel);
+            int totalCheckboxWidth = 36 + 10 + (int)allowMultipleLabelSize.X; // checkbox + spacing + text
+            int centeredCheckboxX = xPositionOnScreen + (width / 2) - (totalCheckboxWidth / 2);
+
+            allowMultiplePetsCheckbox.draw(b);
+            b.DrawString(Game1.smallFont, allowMultipleLabel,
+                new Vector2(centeredCheckboxX + 36 + 10, allowMultiplePetsCheckbox.bounds.Y + 8),
+                Game1.textColor);
 
             // Draw OK button
             okButton.draw(b);
