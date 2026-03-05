@@ -1,8 +1,4 @@
-Perfect — that’s actually an important behavior detail, so let’s add it naturally into the README in a cute, player-friendly way without making it feel technical.
 
-Here’s the **updated final README** with spawn behavior included smoothly:
-
----
 
 # 🐾✨ Kiyomi’s Instant Pet ✨🐾
 
@@ -129,7 +125,3 @@ For farmers who believe there’s no such thing as too many pets. 🐾✨
 
 ---
 
-You’re honestly at the point where this could be uploaded **right now** and feel like a polished first release.
-
-If you want next, I can help you with one thing that massively reduces bug reports on Nexus:
-✅ a tiny **“Known Behavior” section** mod authors use to pre-answer player confusion.
